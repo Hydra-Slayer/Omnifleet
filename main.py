@@ -54,9 +54,31 @@ def on_message(client, userdata, msg):
         node_data[node_id]["live"] = payload
         node_data[node_id]["status"] = status
 
-client = mqtt_client.Client()
-client.on_message = on_message
-client.connect(MQTT_BROKER, 1883)
+import ssl
+
+# --- 2. AWS / MQTT Config ---
+MQTT_BROKER = "your-endpoint-ats.iot.ap-south-1.amazonaws.com"
+PORT = 8883  # MUST BE 8883
+
+# Paths to your certificates (make sure these filenames match yours)
+CA_PATH = "root-CA.crt"
+CERT_PATH = "certificate.pem.crt"
+KEY_PATH = "private.pem.key"
+
+client = mqtt_client.Client(client_id="EC2_Subscriber")
+
+# --- CONFIGURE TLS (THIS IS THE FIX) ---
+client.tls_set(
+    ca_certs=CA_PATH,
+    certfile=CERT_PATH,
+    keyfile=KEY_PATH,
+    cert_reqs=ssl.CERT_REQUIRED,
+    tls_version=ssl.PROTOCOL_TLSv1_2,
+    ciphers=None
+)
+
+# Connect using the secure port
+client.connect(MQTT_BROKER, PORT, keepalive=60)
 client.loop_start()
 
 # --- 5. API Endpoints ---
