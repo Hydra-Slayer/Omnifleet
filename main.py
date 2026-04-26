@@ -63,7 +63,7 @@ PORT = 8883  # MUST BE 8883
 # Paths to your certificates (make sure these filenames match yours)
 CA_PATH = "AmazonRootCA1.pem"
 CERT_PATH = "407846cf0fe3a87133c7accf26e178a13e9300f7d9a121493b67092537a061ab-certificate.pem.crt"
-KEY_PATH = "407846cf0fe3a87133c7accf26e178a13e9300f7d9a121493b67092537a061ab-public.pem.key"
+KEY_PATH = "407846cf0fe3a87133c7accf26e178a13e9300f7d9a121493b67092537a061ab-private.pem.key"
 
 client = mqtt_client.Client(client_id="EC2_Subscriber")
 
