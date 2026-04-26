@@ -44,27 +44,53 @@ node_data = {
 }
 
 # --- 3. AI Prediction Logic ---
+def diagnose_anomaly(data, score):
+    if score >= THRESHOLD:
+        return "Healthy"
+    
+    # Extract values for easier logic
+    et = data.get('engine_temp', 0)
+    ct = data.get('coolant_temp', 0)
+    bt = data.get('battery_temp', 0)
+    bv = data.get('battery_voltage', 0)
+    vz = data.get('vibration_z', 0)
+
+    # Heuristic Logic for the 8 Scenarios
+    if vz > 15.0:
+        return "Engine Misfire"
+    if et > 105 and ct < 80:
+        return "Thermostat Failure"
+    if bt > 50 and bv < 12.5:
+        return "Battery Cell Failure"
+    if bv > 15.5:
+        return "Alternator Overcharge"
+    if et > 105 and ct > 100:
+        return "Radiator Fan Failure"
+    if et > 100 and vz > 11.5:
+        return "Low Oil / Lubrication"
+    if et < 30 and bv < 11.5:
+        return "Cold Crank / Weak Start"
+    
+    return "Unknown Anomaly"
+
 def predict_anomaly(data):
     try:
-        # Match EXACT order of features from training
-        # Features: ['coolant_temp', 'engine_temp', 'battery_temp', 'battery_voltage', 'vibration_z']
+        # Standard AI Scoring
         input_row = pd.DataFrame([[
-            data.get('coolant_temp', 0), 
-            data.get('engine_temp', 0), 
-            data.get('battery_temp', 0), 
-            data.get('battery_voltage', 0), 
-            data.get('vibration_z', 9.81) # Use vibration_z specifically
+            data.get('coolant_temp', 0), data.get('engine_temp', 0), 
+            data.get('battery_temp', 0), data.get('battery_voltage', 0), 
+            data.get('vibration_z', 9.81)
         ]], columns=['coolant_temp', 'engine_temp', 'battery_temp', 'battery_voltage', 'vibration_z'])
         
-        # Scale and Weight
         scaled = scaler.transform(input_row)
-        scaled[:, 4] = scaled[:, 4] * 100  # 100x weight on vibration_z axis
-        
+        scaled[:, 4] = scaled[:, 4] * 100 
         score = model.decision_function(scaled)[0]
-        status = "Anomaly" if score < THRESHOLD else "Healthy"
+        
+        # New Diagnostic Step
+        status = diagnose_anomaly(data, score)
+        
         return status, score
     except Exception as e:
-        print(f"Prediction Error: {e}")
         return "Error", 0
 
 # --- 4. MQTT Subscriber Logic ---
