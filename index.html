@@ -71,7 +71,6 @@
         let current_node = "NODE1";
         let liveChart, histChart;
 
-        // Initialize Charts
         window.onload = function () {
             const ctxLive = document.getElementById('liveChart').getContext('2d');
             liveChart = new Chart(ctxLive, {
@@ -82,33 +81,56 @@
             fetchHistory();
         };
 
-        // Node Selector
         document.getElementById('nodeSelect').addEventListener('change', (e) => {
             current_node = e.target.value;
             fetchHistory();
         });
 
-        // WebSocket for Live Updates
         const ws = new WebSocket(`ws://${window.location.host}/ws`);
         ws.onmessage = (event) => {
-            const status = allNodes[current_node].status;
-            const score = allNodes[current_node].ai_score;
-            const statusElement = document.getElementById('ai_status');
-            const detailElement = document.getElementById('anomaly_detail');
-            const card = document.getElementById('status_card');
+            // --- FIX 1: Parse the incoming JSON ---
+            const allNodes = JSON.parse(event.data);
+            const nodeData = allNodes[current_node];
+            const data = nodeData.live;
+            const status = nodeData.status;
+            const score = nodeData.ai_score;
 
-            if (status === "Healthy") {
-                statusElement.innerText = "HEALTHY";
-                statusElement.className = "text-2xl font-bold text-green-400";
-                detailElement.innerText = `Score: ${score.toFixed(4)}`;
-                card.classList.replace('border-red-500', 'border-gray-500');
-                card.classList.remove('bg-red-900', 'animate-pulse');
-            } else {
-                statusElement.innerText = "ANOMALY DETECTED";
-                statusElement.className = "text-2xl font-bold text-red-400";
-                detailElement.innerText = `Diagnosis: ${status}`; // Shows "Engine Misfire", etc.
-                card.classList.replace('border-gray-500', 'border-red-500');
-                card.classList.add('bg-red-900', 'animate-pulse');
+            if (data && Object.keys(data).length > 0) {
+                // --- FIX 2: Update the numerical values in the cards ---
+                document.getElementById('eng_temp').innerText = (data.engine_temp || 0).toFixed(1) + "°C";
+                document.getElementById('cool_temp').innerText = (data.coolant_temp || 0).toFixed(1) + "°C";
+                document.getElementById('batt_temp').innerText = (data.battery_temp || 0).toFixed(1) + "°C";
+                document.getElementById('batt_volt').innerText = (data.battery_voltage || 0).toFixed(2) + "V";
+                document.getElementById('vib_z').innerText = (data.vibration_z || 0).toFixed(2);
+                document.getElementById('vib_mag').innerText = (data.vibration_mag || 0).toFixed(2);
+
+                // Update Status Display
+                const statusElement = document.getElementById('ai_status');
+                const detailElement = document.getElementById('anomaly_detail');
+                const card = document.getElementById('status_card');
+
+                if (status === "Healthy") {
+                    statusElement.innerText = "HEALTHY";
+                    statusElement.className = "text-2xl font-bold text-green-400";
+                    detailElement.innerText = `Score: ${score.toFixed(4)}`;
+                    card.classList.replace('border-red-500', 'border-gray-500');
+                    card.classList.remove('bg-red-900', 'animate-pulse');
+                } else {
+                    statusElement.innerText = "ANOMALY";
+                    statusElement.className = "text-2xl font-bold text-red-400";
+                    detailElement.innerText = `Diagnosis: ${status}`;
+                    card.classList.replace('border-gray-500', 'border-red-500');
+                    card.classList.add('bg-red-900', 'animate-pulse');
+                }
+
+                // Update Live Graph
+                if (liveChart.data.labels.length > 20) {
+                    liveChart.data.labels.shift();
+                    liveChart.data.datasets[0].data.shift();
+                }
+                liveChart.data.labels.push(new Date().toLocaleTimeString());
+                liveChart.data.datasets[0].data.push(data.vibration_z);
+                liveChart.update('none');
             }
         };
 
@@ -117,7 +139,6 @@
                 const res = await fetch(`/history/${current_node}`);
                 const historyData = await res.json();
                 historyData.sort((a, b) => a.timestamp - b.timestamp);
-
                 const labels = historyData.map(d => new Date(d.timestamp * 1000).toLocaleTimeString());
                 const engTemps = historyData.map(d => d.engine_temp);
 

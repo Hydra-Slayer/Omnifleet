@@ -13,69 +13,53 @@ from boto3.dynamodb.conditions import Key
 
 app = FastAPI()
 
-# --- 1. Load AI Model & Scaler ---
-# Ensure these files are in the same directory as main.py on your EC2
+# --- 1. Load AI Model ---
 model = joblib.load("car_anomaly_model.joblib")
 scaler = joblib.load("scaler.joblib")
 THRESHOLD = 0.07
 
-# --- 2. AWS / MQTT / DynamoDB Config ---
+# --- 2. AWS Configuration ---
 MQTT_BROKER = "a1xcd9hlriueb2-ats.iot.ap-south-1.amazonaws.com"
 PORT = 8883 
 TOPIC = "car/telemetry"
-
 REGION_NAME = 'ap-south-1'
 TABLE_NAME = 'car_telematics_data'
 
-# Certificate Paths (Ensure these exact filenames exist in your folder)
 CA_PATH = "AmazonRootCA1.pem"
 CERT_PATH = "407846cf0fe3a87133c7accf26e178a13e9300f7d9a121493b67092537a061ab-certificate.pem.crt"
 KEY_PATH = "407846cf0fe3a87133c7accf26e178a13e9300f7d9a121493b67092537a061ab-private.pem.key"
 
-# DynamoDB setup
-dynamodb = boto3.resource('dynamodb', region_name='ap-south-1')
-table = dynamodb.Table('car_telematics_data')
+dynamodb = boto3.resource('dynamodb', region_name=REGION_NAME)
+table = dynamodb.Table(TABLE_NAME)
 
-# Global state for the 3 Nodes (What the Website sees)
 node_data = {
     "NODE1": {"live": {}, "status": "Healthy", "ai_score": 0},
     "NODE2": {"live": {}, "status": "Healthy", "ai_score": 0},
     "NODE3": {"live": {}, "status": "Healthy", "ai_score": 0}
 }
 
-# --- 3. AI Prediction Logic ---
+# --- 3. AI & Diagnostic Logic ---
 def diagnose_anomaly(data, score):
     if score >= THRESHOLD:
         return "Healthy"
     
-    # Extract values for easier logic
     et = data.get('engine_temp', 0)
     ct = data.get('coolant_temp', 0)
     bt = data.get('battery_temp', 0)
     bv = data.get('battery_voltage', 0)
     vz = data.get('vibration_z', 0)
 
-    # Heuristic Logic for the 8 Scenarios
-    if vz > 15.0:
-        return "Engine Misfire"
-    if et > 105 and ct < 80:
-        return "Thermostat Failure"
-    if bt > 50 and bv < 12.5:
-        return "Battery Cell Failure"
-    if bv > 15.5:
-        return "Alternator Overcharge"
-    if et > 105 and ct > 100:
-        return "Radiator Fan Failure"
-    if et > 100 and vz > 11.5:
-        return "Low Oil / Lubrication"
-    if et < 30 and bv < 11.5:
-        return "Cold Crank / Weak Start"
-    
+    if vz > 15.0: return "Engine Misfire"
+    if et > 105 and ct < 80: return "Thermostat Failure"
+    if bt > 50 and bv < 12.5: return "Battery Cell Failure"
+    if bv > 15.5: return "Alternator Overcharge"
+    if et > 105 and ct > 100: return "Radiator Fan Failure"
+    if et > 100 and vz > 11.5: return "Low Oil / Lubrication"
+    if et < 30 and bv < 11.5: return "Cold Crank / Weak Start"
     return "Unknown Anomaly"
 
 def predict_anomaly(data):
     try:
-        # Standard AI Scoring
         input_row = pd.DataFrame([[
             data.get('coolant_temp', 0), data.get('engine_temp', 0), 
             data.get('battery_temp', 0), data.get('battery_voltage', 0), 
@@ -86,89 +70,55 @@ def predict_anomaly(data):
         scaled[:, 4] = scaled[:, 4] * 100 
         score = model.decision_function(scaled)[0]
         
-        # New Diagnostic Step
         status = diagnose_anomaly(data, score)
-        
         return status, score
     except Exception as e:
+        print(f"AI Error: {e}")
         return "Error", 0
 
-# --- 4. MQTT Subscriber Logic ---
+# --- 4. MQTT Client ---
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connected to AWS IoT Core!")
         client.subscribe(TOPIC)
-    else:
-        print(f"Connection failed, result code: {rc}")
 
 def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
-        # Force Node ID to uppercase to match our node_data keys
         node_id = str(payload.get("device_id", "")).upper()
-        
         if node_id in node_data:
             status, score = predict_anomaly(payload)
-            
-            # Update the global state
             node_data[node_id]["live"] = payload
             node_data[node_id]["status"] = status
             node_data[node_id]["ai_score"] = round(score, 4)
-            
-            print(f"Processed {node_id}: {status} | Score: {score:.4f}")
     except Exception as e:
-        print(f"MQTT Message Error: {e}")
+        print(f"MQTT Error: {e}")
 
-# Initialize and Configure MQTT Client
 client = mqtt_client.Client(client_id="EC2_Omnifleet_Subscriber")
 client.on_connect = on_connect
 client.on_message = on_message
+client.tls_set(ca_certs=CA_PATH, certfile=CERT_PATH, keyfile=KEY_PATH, 
+               cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2)
 
-client.tls_set(
-    ca_certs=CA_PATH,
-    certfile=CERT_PATH,
-    keyfile=KEY_PATH,
-    cert_reqs=ssl.CERT_REQUIRED,
-    tls_version=ssl.PROTOCOL_TLSv1_2
-)
-
-# Start the MQTT background loop
 client.connect(MQTT_BROKER, PORT, keepalive=60)
 client.loop_start()
 
-# --- 5. FastAPI Web Endpoints ---
-
+# --- 5. Endpoints ---
 @app.get("/")
 async def get_dashboard():
-    try:
-        with open("index.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        return HTMLResponse(content="<h1>index.html not found on EC2</h1>", status_code=404)
+    with open("index.html", "r") as f: return HTMLResponse(content=f.read())
 
 @app.get("/history/{node_id}")
 async def get_history(node_id: str):
-    try:
-        # Query last 50 points from DynamoDB for the selected node
-        response = table.query(
-            KeyConditionExpression=Key('device_id').eq(node_id.upper()),
-            Limit=50, 
-            ScanIndexForward=False
-        )
-        # jsonable_encoder solves the 'Decimal' type error from DynamoDB
-        return jsonable_encoder(response.get('Items', []))
-    except Exception as e:
-        print(f"DynamoDB History Error: {e}")
-        return []
+    response = table.query(KeyConditionExpression=Key('device_id').eq(node_id.upper()), 
+                           Limit=50, ScanIndexForward=False)
+    return jsonable_encoder(response.get('Items', []))
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("Dashboard WebSocket Connected")
     try:
         while True:
-            # Broadcast the latest state of all 3 nodes every second
             await websocket.send_json(node_data)
             await asyncio.sleep(1)
-    except WebSocketDisconnect:
-        print("Dashboard WebSocket Disconnected")
+    except WebSocketDisconnect: pass
