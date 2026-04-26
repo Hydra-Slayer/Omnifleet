@@ -3,8 +3,8 @@
 
 <head>
     <title>Vehicle AI Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,line-clamp"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
 
 <body class="bg-gray-900 text-white p-8">
@@ -70,35 +70,71 @@
             const allNodes = JSON.parse(event.data);
             const data = allNodes[current_node].live;
 
-            if (data.engine_temp) {
-                document.getElementById('eng_temp').innerText = data.engine_temp + "°C";
-                document.getElementById('batt_volt').innerText = data.battery_voltage + "V";
-                document.getElementById('vib_z').innerText = data.vibration.toFixed(2);
-                document.getElementById('ai_status').innerText = allNodes[current_node].status;
+            // Check if we actually have data yet
+            if (!data || Object.keys(data).length === 0) {
+                document.getElementById('ai_status').innerText = "WAITING FOR NODE...";
+                return;
+            }
 
-                // Alert Injection
-                const card = document.getElementById('status_card');
-                if (allNodes[current_node].status === "Anomaly") {
-                    card.classList.replace('border-gray-500', 'border-red-500');
-                    card.classList.add('animate-pulse');
-                } else {
-                    card.classList.replace('border-red-500', 'border-gray-500');
-                    card.classList.remove('animate-pulse');
-                }
+            // Update Gauges (Ensure these keys match your ESP32 JSON exactly!)
+            document.getElementById('eng_temp').innerText = (data.engine_temp || 0) + "°C";
+            document.getElementById('batt_volt').innerText = (data.battery_voltage || 0).toFixed(2) + "V";
+            document.getElementById('vib_z').innerText = (data.vibration || 0).toFixed(2);
 
-                // Update Live Graph
-                if (liveChart.data.labels.length > 20) liveChart.data.labels.shift();
-                if (liveChart.data.datasets[0].data.length > 20) liveChart.data.datasets[0].data.shift();
-                liveChart.data.labels.push(new Date().toLocaleTimeString());
-                liveChart.data.datasets[0].data.push(data.vibration);
-                liveChart.update();
+            // Update Status and AI Score
+            const aiStatus = allNodes[current_node].status;
+            const score = allNodes[current_node].ai_score || 0;
+            document.getElementById('ai_status').innerText = `${aiStatus} (${score})`;
+
+            // Update Status Card Color
+            const card = document.getElementById('status_card');
+            if (aiStatus === "Anomaly") {
+                card.classList.replace('border-gray-500', 'border-red-500');
+                card.classList.replace('bg-gray-800', 'bg-red-900');
+            } else {
+                card.classList.replace('border-red-500', 'border-gray-500');
+                card.classList.replace('bg-red-900', 'bg-gray-800');
             }
         };
 
+        let histChart; // Define globally
+
         async function fetchHistory() {
-            const res = await fetch(`/history/${current_node}`);
-            const data = await res.json();
-            // Map DynamoDB data to histChart...
+            try {
+                const res = await fetch(`/history/${current_node}`);
+                const data = await res.json();
+
+                // 1. Sort data by timestamp (DynamoDB might return it unsorted)
+                data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+                // 2. Map data for the chart
+                const labels = data.map(item => new Date(item.timestamp).toLocaleTimeString());
+                const temperatures = data.map(item => item.engine_temp);
+
+                // 3. Create or Update Chart
+                if (histChart) {
+                    histChart.data.labels = labels;
+                    histChart.data.datasets[0].data = temperatures;
+                    histChart.update();
+                } else {
+                    const ctxHist = document.getElementById('histChart').getContext('2d');
+                    histChart = new Chart(ctxHist, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Engine History (°C)',
+                                data: temperatures,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                fill: true
+                            }]
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load DynamoDB data:", err);
+            }
         }
         fetchHistory();
     </script>
