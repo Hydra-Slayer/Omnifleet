@@ -56,7 +56,8 @@ def on_message(client, userdata, msg):
 
 client = mqtt_client.Client()
 client.on_message = on_message
-# client.connect(...) code goes here
+client.connect(MQTT_BROKER, 1883)
+client.loop_start()
 
 # --- 5. API Endpoints ---
 @app.get("/")
