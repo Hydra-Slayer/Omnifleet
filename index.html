@@ -91,39 +91,24 @@
         // WebSocket for Live Updates
         const ws = new WebSocket(`ws://${window.location.host}/ws`);
         ws.onmessage = (event) => {
-            const allNodes = JSON.parse(event.data);
-            const data = allNodes[current_node].live;
+            const status = allNodes[current_node].status;
+            const score = allNodes[current_node].ai_score;
+            const statusElement = document.getElementById('ai_status');
+            const detailElement = document.getElementById('anomaly_detail');
+            const card = document.getElementById('status_card');
 
-            if (data && Object.keys(data).length > 0) {
-                // Update Temperatures
-                document.getElementById('eng_temp').innerText = (data.engine_temp || 0).toFixed(1) + "°C";
-                document.getElementById('cool_temp').innerText = (data.coolant_temp || 0).toFixed(1) + "°C";
-                document.getElementById('batt_temp').innerText = (data.battery_temp || 0).toFixed(1) + "°C";
-
-                // Update Electrical & Vibration
-                document.getElementById('batt_volt').innerText = (data.battery_voltage || 0).toFixed(2) + "V";
-                document.getElementById('vib_z').innerText = (data.vibration_z || 0).toFixed(2);
-                document.getElementById('vib_mag').innerText = (data.vibration_mag || 0).toFixed(2);
-
-                // Update AI Status
-                const status = allNodes[current_node].status;
-                const score = allNodes[current_node].ai_score;
-                document.getElementById('ai_status').innerText = `${status} (${score})`;
-
-                const card = document.getElementById('status_card');
-                if (status === "Anomaly") {
-                    card.classList.replace('border-gray-500', 'border-red-500');
-                    card.classList.add('bg-red-900', 'animate-pulse');
-                } else {
-                    card.classList.remove('bg-red-900', 'animate-pulse');
-                    card.classList.replace('border-red-500', 'border-gray-500');
-                }
-
-                // Update Live Chart
-                if (liveChart.data.labels.length > 25) { liveChart.data.labels.shift(); liveChart.data.datasets[0].data.shift(); }
-                liveChart.data.labels.push(new Date().toLocaleTimeString());
-                liveChart.data.datasets[0].data.push(data.vibration_z);
-                liveChart.update('none'); // Update without animation for performance
+            if (status === "Healthy") {
+                statusElement.innerText = "HEALTHY";
+                statusElement.className = "text-2xl font-bold text-green-400";
+                detailElement.innerText = `Score: ${score.toFixed(4)}`;
+                card.classList.replace('border-red-500', 'border-gray-500');
+                card.classList.remove('bg-red-900', 'animate-pulse');
+            } else {
+                statusElement.innerText = "ANOMALY DETECTED";
+                statusElement.className = "text-2xl font-bold text-red-400";
+                detailElement.innerText = `Diagnosis: ${status}`; // Shows "Engine Misfire", etc.
+                card.classList.replace('border-gray-500', 'border-red-500');
+                card.classList.add('bg-red-900', 'animate-pulse');
             }
         };
 
