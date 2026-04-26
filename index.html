@@ -7,136 +7,146 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
 
-<body class="bg-gray-900 text-white p-8">
-    <div class="flex justify-between items-center mb-8">
-        <h1 class="text-3xl font-bold">Telematics AI Monitor</h1>
-        <div class="flex gap-4">
-            <select id="nodeSelect" class="bg-gray-800 p-2 rounded border border-gray-600">
-                <option value="NODE1">NODE 1</option>
-                <option value="NODE2">NODE 2</option>
-                <option value="NODE3">NODE 3</option>
-            </select>
+<body class="bg-gray-900 text-white p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
+            Omnifleet Real-Time AI Monitor
+        </h1>
+        <select id="nodeSelect"
+            class="bg-gray-800 p-2 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="NODE1">NODE 1</option>
+            <option value="NODE2">NODE 2</option>
+            <option value="NODE3">NODE 3</option>
+        </select>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-gray-800 p-4 rounded-xl border-b-4 border-orange-500 shadow-lg">
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-1">Engine Temp</p>
+            <h2 id="eng_temp" class="text-3xl font-mono">--°C</h2>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl border-b-4 border-blue-400 shadow-lg">
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-1">Coolant Temp</p>
+            <h2 id="cool_temp" class="text-3xl font-mono">--°C</h2>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl border-b-4 border-emerald-500 shadow-lg">
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-1">Battery Temp</p>
+            <h2 id="batt_temp" class="text-3xl font-mono">--°C</h2>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl border-b-4 border-yellow-500 shadow-lg">
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-1">Battery Voltage</p>
+            <h2 id="batt_volt" class="text-3xl font-mono">--V</h2>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-gray-800 p-6 rounded-xl border-l-4 border-blue-500">
-            <p class="text-gray-400">Engine Temp</p>
-            <h2 id="eng_temp" class="text-4xl font-mono">--</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-gray-800 p-4 rounded-xl border-l-4 border-purple-500 shadow-lg">
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-1">Vibration Z (AI Input)</p>
+            <h2 id="vib_z" class="text-3xl font-mono">--</h2>
         </div>
-        <div class="bg-gray-800 p-6 rounded-xl border-l-4 border-green-500">
-            <p class="text-gray-400">Battery Voltage</p>
-            <h2 id="batt_volt" class="text-4xl font-mono">--</h2>
+        <div class="bg-gray-800 p-4 rounded-xl border-l-4 border-pink-500 shadow-lg">
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-1">Vibration Mag (Live)</p>
+            <h2 id="vib_mag" class="text-3xl font-mono">--</h2>
         </div>
-        <div class="bg-gray-800 p-6 rounded-xl border-l-4 border-purple-500">
-            <p class="text-gray-400">Vibration (Z)</p>
-            <h2 id="vib_z" class="text-4xl font-mono">--</h2>
-        </div>
-        <div id="status_card" class="bg-gray-800 p-6 rounded-xl border-l-4 border-gray-500">
-            <p class="text-gray-400">AI Status</p>
-            <h2 id="ai_status" class="text-2xl font-bold">SCANNING...</h2>
+        <div id="status_card"
+            class="bg-gray-800 p-4 rounded-xl border-l-4 border-gray-500 flex flex-col justify-center transition-all duration-300">
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-1">AI Health Status</p>
+            <h2 id="ai_status" class="text-2xl font-bold uppercase tracking-widest">Scanning...</h2>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div class="bg-gray-800 p-6 rounded-xl">
-            <h3 class="mb-4">Live Vibration Stream</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-gray-800 p-4 rounded-xl shadow-inner h-80">
+            <h3 class="text-sm font-semibold mb-2 text-gray-300">Live Vibration (Z-Axis)</h3>
             <canvas id="liveChart"></canvas>
         </div>
-        <div class="bg-gray-800 p-6 rounded-xl">
-            <h3 class="mb-4">Historical Engine Heat (DynamoDB)</h3>
+        <div class="bg-gray-800 p-4 rounded-xl shadow-inner h-80">
+            <h3 class="text-sm font-semibold mb-2 text-gray-300">Historical Thermal Trends</h3>
             <canvas id="histChart"></canvas>
         </div>
     </div>
 
     <script>
         let current_node = "NODE1";
-        const nodeSelect = document.getElementById('nodeSelect');
-        nodeSelect.addEventListener('change', (e) => {
+        let liveChart, histChart;
+
+        // Initialize Charts
+        window.onload = function () {
+            const ctxLive = document.getElementById('liveChart').getContext('2d');
+            liveChart = new Chart(ctxLive, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Vibration Z', data: [], borderColor: '#a855f7', tension: 0.3 }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } }
+            });
+            fetchHistory();
+        };
+
+        // Node Selector
+        document.getElementById('nodeSelect').addEventListener('change', (e) => {
             current_node = e.target.value;
-            fetchHistory(); // Reload historical graph on node change
+            fetchHistory();
         });
 
-        // Setup Charts
-        const ctxLive = document.getElementById('liveChart').getContext('2d');
-        const liveChart = new Chart(ctxLive, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Vibration', data: [], borderColor: '#a855f7' }] }
-        });
-
-        // WebSocket Connection
+        // WebSocket for Live Updates
         const ws = new WebSocket(`ws://${window.location.host}/ws`);
         ws.onmessage = (event) => {
             const allNodes = JSON.parse(event.data);
             const data = allNodes[current_node].live;
 
-            // Check if we actually have data yet
-            if (!data || Object.keys(data).length === 0) {
-                document.getElementById('ai_status').innerText = "WAITING FOR NODE...";
-                return;
-            }
+            if (data && Object.keys(data).length > 0) {
+                // Update Temperatures
+                document.getElementById('eng_temp').innerText = (data.engine_temp || 0).toFixed(1) + "°C";
+                document.getElementById('cool_temp').innerText = (data.coolant_temp || 0).toFixed(1) + "°C";
+                document.getElementById('batt_temp').innerText = (data.battery_temp || 0).toFixed(1) + "°C";
 
-            // Update Gauges (Ensure these keys match your ESP32 JSON exactly!)
-            document.getElementById('eng_temp').innerText = (data.engine_temp || 0) + "°C";
-            document.getElementById('batt_volt').innerText = (data.battery_voltage || 0).toFixed(2) + "V";
-            document.getElementById('vib_z').innerText = (data.vibration || 0).toFixed(2);
+                // Update Electrical & Vibration
+                document.getElementById('batt_volt').innerText = (data.battery_voltage || 0).toFixed(2) + "V";
+                document.getElementById('vib_z').innerText = (data.vibration_z || 0).toFixed(2);
+                document.getElementById('vib_mag').innerText = (data.vibration_mag || 0).toFixed(2);
 
-            // Update Status and AI Score
-            const aiStatus = allNodes[current_node].status;
-            const score = allNodes[current_node].ai_score || 0;
-            document.getElementById('ai_status').innerText = `${aiStatus} (${score})`;
+                // Update AI Status
+                const status = allNodes[current_node].status;
+                const score = allNodes[current_node].ai_score;
+                document.getElementById('ai_status').innerText = `${status} (${score})`;
 
-            // Update Status Card Color
-            const card = document.getElementById('status_card');
-            if (aiStatus === "Anomaly") {
-                card.classList.replace('border-gray-500', 'border-red-500');
-                card.classList.replace('bg-gray-800', 'bg-red-900');
-            } else {
-                card.classList.replace('border-red-500', 'border-gray-500');
-                card.classList.replace('bg-red-900', 'bg-gray-800');
+                const card = document.getElementById('status_card');
+                if (status === "Anomaly") {
+                    card.classList.replace('border-gray-500', 'border-red-500');
+                    card.classList.add('bg-red-900', 'animate-pulse');
+                } else {
+                    card.classList.remove('bg-red-900', 'animate-pulse');
+                    card.classList.replace('border-red-500', 'border-gray-500');
+                }
+
+                // Update Live Chart
+                if (liveChart.data.labels.length > 25) { liveChart.data.labels.shift(); liveChart.data.datasets[0].data.shift(); }
+                liveChart.data.labels.push(new Date().toLocaleTimeString());
+                liveChart.data.datasets[0].data.push(data.vibration_z);
+                liveChart.update('none'); // Update without animation for performance
             }
         };
-
-        let histChart; // Define globally
 
         async function fetchHistory() {
             try {
                 const res = await fetch(`/history/${current_node}`);
-                const data = await res.json();
+                const historyData = await res.json();
+                historyData.sort((a, b) => a.timestamp - b.timestamp);
 
-                // 1. Sort data by timestamp (DynamoDB might return it unsorted)
-                data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                const labels = historyData.map(d => new Date(d.timestamp * 1000).toLocaleTimeString());
+                const engTemps = historyData.map(d => d.engine_temp);
 
-                // 2. Map data for the chart
-                const labels = data.map(item => new Date(item.timestamp).toLocaleTimeString());
-                const temperatures = data.map(item => item.engine_temp);
-
-                // 3. Create or Update Chart
-                if (histChart) {
-                    histChart.data.labels = labels;
-                    histChart.data.datasets[0].data = temperatures;
-                    histChart.update();
-                } else {
-                    const ctxHist = document.getElementById('histChart').getContext('2d');
-                    histChart = new Chart(ctxHist, {
-                        type: 'line',
-                        data: {
-                            labels: labels,
-                            datasets: [{
-                                label: 'Engine History (°C)',
-                                data: temperatures,
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                fill: true
-                            }]
-                        }
-                    });
-                }
-            } catch (err) {
-                console.error("Failed to load DynamoDB data:", err);
-            }
+                if (histChart) histChart.destroy();
+                const ctxHist = document.getElementById('histChart').getContext('2d');
+                histChart = new Chart(ctxHist, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{ label: 'Engine Temp', data: engTemps, borderColor: '#f97316', fill: false }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            } catch (e) { console.error("History fetch failed", e); }
         }
-        fetchHistory();
     </script>
 </body>
 

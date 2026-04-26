@@ -46,21 +46,20 @@ node_data = {
 # --- 3. AI Prediction Logic ---
 def predict_anomaly(data):
     try:
-        # Map incoming data to the specific 5 features expected by the model
-        # Note: mapping 'vibration' from ESP32 to 'vibration_z' used in training
+        # Match EXACT order of features from training
+        # Features: ['coolant_temp', 'engine_temp', 'battery_temp', 'battery_voltage', 'vibration_z']
         input_row = pd.DataFrame([[
             data.get('coolant_temp', 0), 
             data.get('engine_temp', 0), 
             data.get('battery_temp', 0), 
             data.get('battery_voltage', 0), 
-            data.get('vibration', 0)
-        ]], columns=['coolant_temp', 'engine_temp', 'battery_temp', 'battery_voltage', 'vibration'])
+            data.get('vibration_z', 9.81) # Use vibration_z specifically
+        ]], columns=['coolant_temp', 'engine_temp', 'battery_temp', 'battery_voltage', 'vibration_z'])
         
         # Scale and Weight
         scaled = scaler.transform(input_row)
-        scaled[:, 4] = scaled[:, 4] * 100  # 100x Vibration Weighting to catch the misfire
+        scaled[:, 4] = scaled[:, 4] * 100  # 100x weight on vibration_z axis
         
-        # Get Anomaly Score (Decision Function)
         score = model.decision_function(scaled)[0]
         status = "Anomaly" if score < THRESHOLD else "Healthy"
         return status, score
