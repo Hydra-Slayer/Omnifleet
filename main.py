@@ -57,7 +57,7 @@ def on_message(client, userdata, msg):
 import ssl
 
 # --- 2. AWS / MQTT Config ---
-MQTT_BROKER = "your-endpoint-ats.iot.ap-south-1.amazonaws.com"
+MQTT_BROKER = "a1xcd9hlriueb2-ats.iot.ap-south-1.amazonaws.com"
 PORT = 8883  # MUST BE 8883
 
 # Paths to your certificates (make sure these filenames match yours)
