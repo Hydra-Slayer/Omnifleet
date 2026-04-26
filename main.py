@@ -17,11 +17,11 @@ scaler = joblib.load("scaler.joblib")
 THRESHOLD = 0.07
 
 # --- 2. AWS / MQTT Config ---
-MQTT_BROKER = "your-iot-endpoint.amazonaws.com"
+MQTT_BROKER = "a1xcd9hlriueb2-ats.iot.ap-south-1.amazonaws.com"
 TOPIC = "car/telemetry"
 # DynamoDB setup
-dynamodb = boto3.resource('dynamodb', region_name='your-region')
-table = dynamodb.Table('YourTableName')
+dynamodb = boto3.resource('dynamodb', region_name='ap-south-1')
+table = dynamodb.Table('car_telematics_data')
 
 # Shared state for the 3 Nodes
 node_data = {
